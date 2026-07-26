@@ -1,0 +1,125 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+// generator client {
+//   provider = "prisma-client"
+//   output   = "../generated/prisma"
+// }
+
+// datasource db {
+//   provider = "postgresql"
+// }
+
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum UserRole {
+  SUPER_ADMIN // Admin de la plateforme SaaS (toi)
+  ADMIN       // Admin de la PME (Tenant)
+  MANAGER     // Manager dans la PME
+  USER        // Employé standard
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  TRIAL
+  CANCELLED
+}
+
+// ==========================================
+// CORE SAAS (Identité & Tenants)
+// ==========================================
+
+/// Le Tenant représente une PME cliente de ton SaaS
+model Tenant {
+  id        String       @id @default(cuid())
+  name      String       // Nom de l'entreprise
+  slug      String       @unique // Pour les URLs (ex: acme.votresaas.com)
+  status    TenantStatus @default(TRIAL)
+  plan      String       @default("basic") // future monétisation
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  users     User[]
+  clients   Client[]
+  products  Product[]
+  // ... on ajoutera les factures, devis, etc. plus tard
+
+  @@map("tenants")
+}
+
+/// L'utilisateur est toujours lié à un Tenant (sauf le SUPER_ADMIN)
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // On le hashera avec bcrypt
+  firstName String   @map("first_name")
+  lastName  String   @map("last_name")
+  role      UserRole @default(USER)
+  isActive  Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relation
+  tenantId  String   @map("tenant_id")
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("users")
+}
+
+// ==========================================
+// MODULES MÉTIERS (Bases pour la suite)
+// ==========================================
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?  @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // ISOLATION SAAS : Toujours lié au Tenant !
+  tenantId  String   @map("tenant_id")
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId]) // Index crucial pour les performances des requêtes multi-tenant
+  @@map("clients")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  price       Decimal  @db.Decimal(10, 2) // Toujours Decimal pour l'argent !
+  sku         String?  @unique // Stock Keeping Unit
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenantId    String   @map("tenant_id")
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("products")
+}
