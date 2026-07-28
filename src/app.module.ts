@@ -8,6 +8,8 @@ import { PermissionsGuard } from '@common/guards/permissions.guard';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { envValidationSchema } from '@config/env.validation';
 import { AuthModule } from '@modules/auth/auth.module';
+import { InvoicesModule } from '@modules/invoices/invoices.module';
+import { OrdersModule } from '@modules/orders/orders.module';
 import { ProductsModule } from '@modules/products/products.module';
 import { QuotesModule } from '@modules/quotes/quotes.module';
 import { RolesModule } from '@modules/roles/roles.module';
@@ -40,6 +42,8 @@ import { AppService } from './app.service';
     RolesModule,
     ProductsModule,
     QuotesModule,
+    OrdersModule,
+    InvoicesModule,
   ],
   controllers: [AppController],
   providers: [

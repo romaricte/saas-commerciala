@@ -47,6 +47,20 @@ Le cours dédié est dans
 Le cours complet est dans
 [`docs/cours-catalogue-devis.md`](docs/cours-catalogue-devis.md).
 
+## Commandes, factures et paiements
+
+- conversion atomique d’un devis accepté en commande confirmée ;
+- commandes manuelles, versionnées et pilotées par machine à états ;
+- conversion d’une commande en facture au brouillon ;
+- numéro officiel attribué uniquement lors de l’émission ;
+- factures émises immuables et annulation tracée ;
+- paiements partiels, solde restant et détection des retards ;
+- contrepassation des paiements sans destruction d’historique ;
+- RBAC, snapshots, transactions sérialisables et audit.
+
+Le cours complet est dans
+[`docs/cours-commandes-factures.md`](docs/cours-commandes-factures.md).
+
 ## Démarrage
 
 ```bash
