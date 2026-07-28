@@ -25,6 +25,24 @@ enum AuthTokenType {
   PASSWORD_RESET
 }
 
+enum CatalogItemType {
+  PRODUCT
+  SERVICE
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum DocumentType {
+  QUOTE
+}
+
 model Tenant {
   id     String       @id @default(cuid())
   name   String
@@ -41,6 +59,8 @@ model Tenant {
   roles       Role[]
   invitations UserInvitation[]
   auditLogs   AuditLog[]
+  quotes      Quote[]
+  sequences   DocumentSequence[]
 
   @@map("tenants")
 }
@@ -67,12 +87,14 @@ model User {
   tenantId String? @map("tenant_id")
   tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  sessions        AuthSession[]
-  authTokens      AuthToken[]
-  roleAssignments UserRoleAssignment[] @relation("UserAssignedRoles")
-  rolesAssigned   UserRoleAssignment[] @relation("RoleAssignedBy")
-  sentInvitations UserInvitation[]     @relation("InvitationInviter")
-  auditLogs       AuditLog[]           @relation("AuditActor")
+  sessions           AuthSession[]
+  authTokens         AuthToken[]
+  roleAssignments    UserRoleAssignment[] @relation("UserAssignedRoles")
+  rolesAssigned      UserRoleAssignment[] @relation("RoleAssignedBy")
+  sentInvitations    UserInvitation[]     @relation("InvitationInviter")
+  auditLogs          AuditLog[]           @relation("AuditActor")
+  createdQuotes      Quote[]              @relation("QuoteCreator")
+  quoteStatusChanges QuoteStatusHistory[] @relation("QuoteStatusActor")
 
   @@index([tenantId])
   @@map("users")
@@ -277,26 +299,130 @@ model Client {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  tenantId String @map("tenant_id")
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String  @map("tenant_id")
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quotes   Quote[]
 
   @@index([tenantId])
   @@map("clients")
 }
 
 model Product {
-  id          String  @id @default(cuid())
-  name        String
-  description String? @db.Text
-  price       Decimal @db.Decimal(10, 2)
-  sku         String? @unique
+  id          String          @id @default(cuid())
+  type        CatalogItemType @default(PRODUCT)
+  name        String          @db.VarChar(160)
+  description String?         @db.Text
+  sku         String?         @db.VarChar(80)
+  unit        String          @default("unit") @db.VarChar(30)
+  salePrice   Decimal         @map("sale_price") @db.Decimal(14, 2)
+  costPrice   Decimal?        @map("cost_price") @db.Decimal(14, 2)
+  taxRate     Decimal         @default(0) @map("tax_rate") @db.Decimal(5, 2)
+  currency    String          @default("XOF") @db.Char(3)
+  archivedAt  DateTime?       @map("archived_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  tenantId String @map("tenant_id")
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId   String      @map("tenant_id")
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quoteLines QuoteLine[]
 
-  @@index([tenantId])
+  @@unique([tenantId, sku])
+  @@index([tenantId, type, archivedAt])
+  @@index([tenantId, name])
   @@map("products")
+}
+
+/// Compteur transactionnel par tenant, type de document et année.
+/// Il garantit l'unicité des numéros même avec plusieurs requêtes concurrentes.
+model DocumentSequence {
+  tenantId     String       @map("tenant_id")
+  documentType DocumentType @map("document_type")
+  year         Int
+  nextValue    Int          @default(1) @map("next_value")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, documentType, year])
+  @@map("document_sequences")
+}
+
+model Quote {
+  id            String      @id @default(cuid())
+  number        String      @db.VarChar(40)
+  status        QuoteStatus @default(DRAFT)
+  version       Int         @default(1)
+  issueDate     DateTime    @map("issue_date") @db.Date
+  validUntil    DateTime    @map("valid_until") @db.Date
+  currency      String      @default("XOF") @db.Char(3)
+  notes         String?     @db.Text
+  terms         String?     @db.Text
+  subtotal      Decimal     @db.Decimal(14, 2)
+  discountTotal Decimal     @default(0) @map("discount_total") @db.Decimal(14, 2)
+  taxTotal      Decimal     @default(0) @map("tax_total") @db.Decimal(14, 2)
+  total         Decimal     @db.Decimal(14, 2)
+
+  tenantId    String  @map("tenant_id")
+  clientId    String  @map("client_id")
+  createdById String? @map("created_by_id")
+
+  tenant    Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client    Client               @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  createdBy User?                @relation("QuoteCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  lines     QuoteLine[]
+  history   QuoteStatusHistory[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, clientId])
+  @@map("quotes")
+}
+
+/// Instantané commercial : les champs ne dépendent pas des modifications
+/// futures du catalogue. productId reste facultatif pour les lignes libres.
+model QuoteLine {
+  id            String  @id @default(cuid())
+  position      Int
+  label         String  @db.VarChar(160)
+  description   String? @db.Text
+  sku           String? @db.VarChar(80)
+  unit          String  @db.VarChar(30)
+  quantity      Decimal @db.Decimal(12, 3)
+  unitPrice     Decimal @map("unit_price") @db.Decimal(14, 2)
+  discountRate  Decimal @default(0) @map("discount_rate") @db.Decimal(5, 2)
+  taxRate       Decimal @default(0) @map("tax_rate") @db.Decimal(5, 2)
+  subtotal      Decimal @db.Decimal(14, 2)
+  discountTotal Decimal @map("discount_total") @db.Decimal(14, 2)
+  taxTotal      Decimal @map("tax_total") @db.Decimal(14, 2)
+  total         Decimal @db.Decimal(14, 2)
+
+  quoteId   String  @map("quote_id")
+  productId String? @map("product_id")
+
+  quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@unique([quoteId, position])
+  @@index([productId])
+  @@map("quote_lines")
+}
+
+model QuoteStatusHistory {
+  id          String       @id @default(cuid())
+  fromStatus  QuoteStatus? @map("from_status")
+  toStatus    QuoteStatus  @map("to_status")
+  comment     String?      @db.VarChar(500)
+  quoteId     String       @map("quote_id")
+  changedById String?      @map("changed_by_id")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  quote     Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  changedBy User? @relation("QuoteStatusActor", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([quoteId, createdAt])
+  @@index([changedById])
+  @@map("quote_status_history")
 }

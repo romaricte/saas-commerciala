@@ -34,6 +34,19 @@ Le cours qui explique chaque choix et chaque flux est dans
 Le cours dédié est dans
 [`docs/cours-gestion-utilisateurs-rbac.md`](docs/cours-gestion-utilisateurs-rbac.md).
 
+## Catalogue produits/services et devis
+
+- catalogue unifié avec distinction `PRODUCT` / `SERVICE` ;
+- SKU unique par tenant, prix, coût, taxe, devise et unité ;
+- archivage logique préservant l’historique ;
+- devis numérotés atomiquement par tenant et par année ;
+- lignes snapshot, calculs décimaux et cycle de vie contrôlé ;
+- contrôle de concurrence par version ;
+- transactions sérialisables et journal d’audit.
+
+Le cours complet est dans
+[`docs/cours-catalogue-devis.md`](docs/cours-catalogue-devis.md).
+
 ## Démarrage
 
 ```bash

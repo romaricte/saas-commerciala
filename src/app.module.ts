@@ -8,6 +8,8 @@ import { PermissionsGuard } from '@common/guards/permissions.guard';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { envValidationSchema } from '@config/env.validation';
 import { AuthModule } from '@modules/auth/auth.module';
+import { ProductsModule } from '@modules/products/products.module';
+import { QuotesModule } from '@modules/quotes/quotes.module';
 import { RolesModule } from '@modules/roles/roles.module';
 import { UsersModule } from '@modules/users/users.module';
 import { PrismaModule } from '@prisma/prisma.module';
@@ -36,6 +38,8 @@ import { AppService } from './app.service';
     AuthModule,
     UsersModule,
     RolesModule,
+    ProductsModule,
+    QuotesModule,
   ],
   controllers: [AppController],
   providers: [
